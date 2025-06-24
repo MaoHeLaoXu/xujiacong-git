@@ -1,22 +1,36 @@
+/*
+ *@Type CommandDTO.java
+ * @Desc
+ * @Author urmsone urmsone@163.com
+ * @date 2024/6/13 12:57
+ * @version
+ */
 package dto;
 
-import model.command.AbstractCommand;
+import lombok.Getter;
+import lombok.Setter;
 
-/**
- * 动作数据传输对象
- */
-public class ActionDTO {
-    private AbstractCommand command;
+import java.io.Serializable;
 
-    public ActionDTO(AbstractCommand command) {
-        this.command = command;
+@Setter
+@Getter
+public class ActionDTO implements Serializable {
+    private ActionTypeEnum type;
+    private String key;
+    private String value;
+
+    public ActionDTO(ActionTypeEnum type, String key, String value) {
+        this.type = type;
+        this.key = key;
+        this.value = value;
     }
 
-    public AbstractCommand getCommand() {
-        return command;
-    }
-
-    public void setCommand(AbstractCommand command) {
-        this.command = command;
+    @Override
+    public String toString() {
+        return "ActionDTO{" +
+                "type=" + type +
+                ", key='" + key + '\'' +
+                ", value='" + value + '\'' +
+                '}';
     }
 }

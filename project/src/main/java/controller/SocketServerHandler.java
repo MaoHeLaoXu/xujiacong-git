@@ -1,103 +1,76 @@
+/*
+ *@Type SocketServerHandler.java
+ * @Desc
+ * @Author urmsone urmsone@163.com
+ * @date 2024/6/13 12:50
+ * @version
+ */
 package controller;
 
-import com.alibaba.fastjson.JSON;
 import dto.ActionDTO;
+import dto.ActionTypeEnum;
 import dto.RespDTO;
-import model.command.AbstractCommand;
-import model.command.RmCommand;
-import model.command.SetCommand;
+import dto.RespStatusTypeEnum;
+import service.NormalStore;
 import service.Store;
+import utils.LoggerUtil;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Socket服务器处理程序
- */
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 public class SocketServerHandler implements Runnable {
-    private Socket clientSocket;
+    private final Logger LOGGER = LoggerFactory.getLogger(SocketServerHandler.class);
+    private Socket socket;
     private Store store;
-    private AtomicBoolean running = new AtomicBoolean(true);
 
-    public SocketServerHandler(Socket clientSocket, Store store) {
-        this.clientSocket = clientSocket;
+    public SocketServerHandler(Socket socket, Store store) {
+        this.socket = socket;
         this.store = store;
     }
 
     @Override
     public void run() {
-        try (InputStream inputStream = clientSocket.getInputStream();
-             OutputStream outputStream = clientSocket.getOutputStream()) {
+        try (ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
+             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream())) {
 
-            byte[] buffer = new byte[1024];
-            int length;
+            // 接收序列化对象
+            ActionDTO dto = (ActionDTO) ois.readObject();
+            LoggerUtil.debug(LOGGER, "[SocketServerHandler][ActionDTO]: {}", dto.toString());
+            System.out.println("" + dto.toString());
 
-            while (running.get() && (length = inputStream.read(buffer)) != -1) {
-                String request = new String(buffer, 0, length, StandardCharsets.UTF_8);
-                System.out.println("收到客户端请求: " + request);
-
-                // 处理请求
-                String response = processRequest(request);
-
-                // 发送响应
-                outputStream.write(response.getBytes(StandardCharsets.UTF_8));
-                outputStream.flush();
+            // 处理命令逻辑(TODO://改成可动态适配的模式)
+            if (dto.getType() == ActionTypeEnum.GET) {
+                String value = this.store.get(dto.getKey());
+                LoggerUtil.debug(LOGGER, "[SocketServerHandler][run]: {}", "get action resp" + dto.toString());
+                RespDTO resp = new RespDTO(RespStatusTypeEnum.SUCCESS, value);
+                oos.writeObject(resp);
+                oos.flush();
+            }
+            if (dto.getType() == ActionTypeEnum.SET) {
+                this.store.set(dto.getKey(), dto.getValue());
+                LoggerUtil.debug(LOGGER, "[SocketServerHandler][run]: {}", "set action resp" + dto.toString());
+                RespDTO resp = new RespDTO(RespStatusTypeEnum.SUCCESS, null);
+                oos.writeObject(resp);
+                oos.flush();
+            }
+            if (dto.getType() == ActionTypeEnum.RM) {
+                this.store.rm(dto.getKey());
             }
 
-        } catch (IOException e) {
-            System.err.println("客户端处理异常: " + e.getMessage());
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
         } finally {
             try {
-                if (clientSocket != null && !clientSocket.isClosed()) {
-                    clientSocket.close();
-                }
+                socket.close();
             } catch (IOException e) {
-                System.err.println("关闭客户端连接失败: " + e.getMessage());
+                e.printStackTrace();
             }
         }
     }
 
-    private String processRequest(String request) {
-        try {
-            ActionDTO actionDTO = JSON.parseObject(request, ActionDTO.class);
-            AbstractCommand command = actionDTO.getCommand();
 
-            if (command == null) {
-                return JSON.toJSONString(RespDTO.fail("无效的命令"));
-            }
-
-            switch (command.getType()) {
-                case SET:
-                    if (command instanceof SetCommand) {
-                        SetCommand setCommand = (SetCommand) command;
-                        store.set(setCommand.getKey(), setCommand.getValue());
-                        return JSON.toJSONString(RespDTO.success("设置成功", null));
-                    }
-                    break;
-                case RM:
-                    if (command instanceof RmCommand) {
-                        RmCommand rmCommand = (RmCommand) command;
-                        store.rm(rmCommand.getKey());
-                        return JSON.toJSONString(RespDTO.success("删除成功", null));
-                    }
-                    break;
-                case GET:
-                    if (command instanceof SetCommand) { // 简化处理，使用SetCommand存储get请求的key
-                        SetCommand getCommand = (SetCommand) command;
-                        String value = store.get(getCommand.getKey());
-                        return JSON.toJSONString(RespDTO.success("获取成功", value));
-                    }
-                    break;
-            }
-
-            return JSON.toJSONString(RespDTO.fail("不支持的命令类型"));
-        } catch (Exception e) {
-            System.err.println("处理请求失败: " + e.getMessage());
-            return JSON.toJSONString(RespDTO.fail("处理请求失败: " + e.getMessage()));
-        }
-    }
 }
