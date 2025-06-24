@@ -1,17 +1,8 @@
-/*
- *@Type SocketServerHandler.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 12:50
- * @version
- */
 package controller;
 
-import dto.ActionDTO;
 import dto.ActionTypeEnum;
 import dto.RespDTO;
 import dto.RespStatusTypeEnum;
-import service.NormalStore;
 import service.Store;
 import utils.LoggerUtil;
 
@@ -20,7 +11,6 @@ import java.net.Socket;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 public class SocketServerHandler implements Runnable {
     private final Logger LOGGER = LoggerFactory.getLogger(SocketServerHandler.class);
@@ -49,16 +39,18 @@ public class SocketServerHandler implements Runnable {
                 RespDTO resp = new RespDTO(RespStatusTypeEnum.SUCCESS, value);
                 oos.writeObject(resp);
                 oos.flush();
-            }
-            if (dto.getType() == ActionTypeEnum.SET) {
+            } else if (dto.getType() == ActionTypeEnum.SET) {
                 this.store.set(dto.getKey(), dto.getValue());
                 LoggerUtil.debug(LOGGER, "[SocketServerHandler][run]: {}", "set action resp" + dto.toString());
                 RespDTO resp = new RespDTO(RespStatusTypeEnum.SUCCESS, null);
                 oos.writeObject(resp);
                 oos.flush();
-            }
-            if (dto.getType() == ActionTypeEnum.RM) {
+            } else if (dto.getType() == ActionTypeEnum.RM) {
                 this.store.rm(dto.getKey());
+                LoggerUtil.debug(LOGGER, "[SocketServerHandler][run]: {}", "rm action resp" + dto.toString());
+                RespDTO resp = new RespDTO(RespStatusTypeEnum.SUCCESS, null);
+                oos.writeObject(resp);
+                oos.flush();
             }
 
         } catch (IOException | ClassNotFoundException e) {
@@ -71,6 +63,4 @@ public class SocketServerHandler implements Runnable {
             }
         }
     }
-
-
 }

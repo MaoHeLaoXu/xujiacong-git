@@ -1,10 +1,3 @@
-/*
- *@Type ServerController.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 12:20
- * @version
- */
 package controller;
 
 import lombok.Getter;
@@ -30,6 +23,8 @@ public class SocketServerController implements Controller {
     private int port;
     private Store store;
 
+    private ServerSocket serverSocket;
+
     public SocketServerController(String host, int port, Store store) {
         this.host = host;
         this.port = port;
@@ -38,28 +33,30 @@ public class SocketServerController implements Controller {
 
     @Override
     public void set(String key, String value) {
-
+        // 可根据需求实现
     }
 
     @Override
     public String get(String key) {
+        // 可根据需求实现
         return null;
     }
 
     @Override
     public void rm(String key) {
-
+        // 可根据需求实现
     }
 
     @Override
     public void startServer() {
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            LoggerUtil.info(LOGGER, logFormat,"startServer","Server started, waiting for connections...");
+        try {
+            serverSocket = new ServerSocket(port);
+            LoggerUtil.info(LOGGER, logFormat, "startServer", "Server started, waiting for connections...");
 
             while (true) {
                 try {
                     Socket socket = serverSocket.accept();
-                    LoggerUtil.info(LOGGER, logFormat,"startServer","New client connected");
+                    LoggerUtil.info(LOGGER, logFormat, "startServer", "New client connected");
                     // 为每个客户端连接创建一个新的线程
                     new Thread(new SocketServerHandler(socket, store)).start();
                 } catch (IOException e) {
@@ -69,6 +66,19 @@ public class SocketServerController implements Controller {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
 
+    public void stopServer() {
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+                LoggerUtil.info(LOGGER, logFormat, "stopServer", "Server stopped");
+            }
+            if (store != null) {
+                store.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

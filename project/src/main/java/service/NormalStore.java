@@ -1,10 +1,3 @@
-/*
- *@Type NormalStore.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 02:07
- * @version
- */
 package service;
 
 import com.alibaba.fastjson.JSON;
@@ -28,7 +21,6 @@ import java.util.HashMap;
 import java.util.TreeMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.jar.JarEntry;
 
 public class NormalStore implements Store {
 
@@ -38,7 +30,6 @@ public class NormalStore implements Store {
     private final Logger LOGGER = LoggerFactory.getLogger(NormalStore.class);
     private final String logFormat = "[NormalStore][{}]: {}";
 
-
     /**
      * 内存表，类似缓存
      */
@@ -46,7 +37,7 @@ public class NormalStore implements Store {
 
     /**
      * hash索引，存的是数据长度和偏移量
-     * */
+     */
     private HashMap<String, CommandPos> index;
 
     /**
@@ -67,17 +58,17 @@ public class NormalStore implements Store {
     /**
      * 持久化阈值
      */
-//    private final int storeThreshold;
+    private static final int STORE_THRESHOLD = 100;
 
     public NormalStore(String dataDir) {
         this.dataDir = dataDir;
         this.indexLock = new ReentrantReadWriteLock();
-        this.memTable = new TreeMap<String, Command>();
+        this.memTable = new TreeMap<>();
         this.index = new HashMap<>();
 
         File file = new File(dataDir);
         if (!file.exists()) {
-            LoggerUtil.info(LOGGER,logFormat, "NormalStore","dataDir isn't exist,creating...");
+            LoggerUtil.info(LOGGER, logFormat, "NormalStore", "dataDir isn't exist,creating...");
             file.mkdirs();
         }
         this.reloadIndex();
@@ -86,7 +77,6 @@ public class NormalStore implements Store {
     public String genFilePath() {
         return this.dataDir + File.separator + NAME + TABLE;
     }
-
 
     public void reloadIndex() {
         try {
@@ -111,7 +101,7 @@ public class NormalStore implements Store {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        LoggerUtil.debug(LOGGER, logFormat, "reload index: "+index.toString());
+        LoggerUtil.debug(LOGGER, logFormat, "reload index: " + index.toString());
     }
 
     @Override
@@ -121,15 +111,18 @@ public class NormalStore implements Store {
             byte[] commandBytes = JSONObject.toJSONBytes(command);
             // 加锁
             indexLock.writeLock().lock();
-            // TODO://先写内存表，内存表达到一定阀值再写进磁盘
+            // 先写内存表
+            memTable.put(key, command);
+            // 判断是否需要将内存表中的值写回table
+            if (memTable.size() >= STORE_THRESHOLD) {
+                flushMemTable();
+            }
             // 写table（wal）文件
             RandomAccessFileUtil.writeInt(this.genFilePath(), commandBytes.length);
             int pos = RandomAccessFileUtil.write(this.genFilePath(), commandBytes);
-            // 保存到memTable
             // 添加索引
             CommandPos cmdPos = new CommandPos(pos, commandBytes.length);
             index.put(key, cmdPos);
-            // TODO://判断是否需要将内存表中的值写回table
         } catch (Throwable t) {
             throw new RuntimeException(t);
         } finally {
@@ -141,6 +134,15 @@ public class NormalStore implements Store {
     public String get(String key) {
         try {
             indexLock.readLock().lock();
+            // 先从内存表中获取
+            Command command = memTable.get(key);
+            if (command != null) {
+                if (command instanceof SetCommand) {
+                    return ((SetCommand) command).getValue();
+                } else if (command instanceof RmCommand) {
+                    return null;
+                }
+            }
             // 从索引中获取信息
             CommandPos cmdPos = index.get(key);
             if (cmdPos == null) {
@@ -149,11 +151,11 @@ public class NormalStore implements Store {
             byte[] commandBytes = RandomAccessFileUtil.readByIndex(this.genFilePath(), cmdPos.getPos(), cmdPos.getLen());
 
             JSONObject value = JSONObject.parseObject(new String(commandBytes));
-            Command cmd = CommandUtil.jsonToCommand(value);
-            if (cmd instanceof SetCommand) {
-                return ((SetCommand) cmd).getValue();
+            command = CommandUtil.jsonToCommand(value);
+            if (command instanceof SetCommand) {
+                return ((SetCommand) command).getValue();
             }
-            if (cmd instanceof RmCommand) {
+            if (command instanceof RmCommand) {
                 return null;
             }
 
@@ -172,18 +174,18 @@ public class NormalStore implements Store {
             byte[] commandBytes = JSONObject.toJSONBytes(command);
             // 加锁
             indexLock.writeLock().lock();
-            // TODO://先写内存表，内存表达到一定阀值再写进磁盘
-
+            // 先写内存表
+            memTable.put(key, command);
+            // 判断是否需要将内存表中的值写回table
+            if (memTable.size() >= STORE_THRESHOLD) {
+                flushMemTable();
+            }
             // 写table（wal）文件
+            RandomAccessFileUtil.writeInt(this.genFilePath(), commandBytes.length);
             int pos = RandomAccessFileUtil.write(this.genFilePath(), commandBytes);
-            // 保存到memTable
-
             // 添加索引
             CommandPos cmdPos = new CommandPos(pos, commandBytes.length);
             index.put(key, cmdPos);
-
-            // TODO://判断是否需要将内存表中的值写回table
-
         } catch (Throwable t) {
             throw new RuntimeException(t);
         } finally {
@@ -191,8 +193,26 @@ public class NormalStore implements Store {
         }
     }
 
+    private void flushMemTable() {
+        try {
+            for (Command command : memTable.values()) {
+                byte[] commandBytes = JSONObject.toJSONBytes(command);
+                RandomAccessFileUtil.writeInt(this.genFilePath(), commandBytes.length);
+                int pos = RandomAccessFileUtil.write(this.genFilePath(), commandBytes);
+                CommandPos cmdPos = new CommandPos(pos, commandBytes.length);
+                index.put(command.getKey(), cmdPos);
+            }
+            memTable.clear();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void close() throws IOException {
-
+        if (writerReader != null) {
+            writerReader.close();
+        }
+        flushMemTable();
     }
 }
