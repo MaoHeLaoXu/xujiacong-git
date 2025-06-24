@@ -1,74 +1,68 @@
-/*
- *@Type ServerController.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 12:20
- * @version
- */
 package controller;
 
-import lombok.Getter;
-import lombok.Setter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import service.NormalStore;
 import service.Store;
-import utils.LoggerUtil;
+import service.NormalStore;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-@Setter
-@Getter
-public class SocketServerController implements Controller {
+/**
+ * Socket服务器控制器
+ */
+public class SocketServerController {
+    private static final int PORT = 8888;
+    private static final String DATA_DIR = "data";
+    private static final int STORE_THRESHOLD = 1000;
 
-    private final Logger LOGGER = LoggerFactory.getLogger(SocketServerController.class);
-    private final String logFormat = "[SocketServerController][{}]: {}";
-    private String host;
-    private int port;
     private Store store;
+    private ServerSocket serverSocket;
+    private ExecutorService executorService;
+    private boolean running = false;
 
-    public SocketServerController(String host, int port, Store store) {
-        this.host = host;
-        this.port = port;
-        this.store = store;
+    public SocketServerController() {
+        this.store = new NormalStore(DATA_DIR, STORE_THRESHOLD);
+        this.executorService = Executors.newFixedThreadPool(10);
     }
 
-    @Override
-    public void set(String key, String value) {
+    public void start() {
+        try {
+            serverSocket = new ServerSocket(PORT);
+            running = true;
+            System.out.println("服务器启动成功，监听端口: " + PORT);
 
-    }
+            while (running) {
+                Socket clientSocket = serverSocket.accept();
+                System.out.println("新客户端连接: " + clientSocket.getInetAddress());
 
-    @Override
-    public String get(String key) {
-        return null;
-    }
-
-    @Override
-    public void rm(String key) {
-
-    }
-
-    @Override
-    public void startServer() {
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            LoggerUtil.info(LOGGER, logFormat,"startServer","Server started, waiting for connections...");
-
-            while (true) {
-                try {
-                    Socket socket = serverSocket.accept();
-                    LoggerUtil.info(LOGGER, logFormat,"startServer","New client connected");
-                    // 为每个客户端连接创建一个新的线程
-                    new Thread(new SocketServerHandler(socket, store)).start();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                // 为每个客户端创建一个处理线程
+                SocketServerHandler handler = new SocketServerHandler(clientSocket, store);
+                executorService.execute(handler);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("服务器启动失败: " + e.getMessage());
+        } finally {
+            stop();
         }
+    }
 
+    public void stop() {
+        running = false;
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+            }
+            executorService.shutdown();
+            System.out.println("服务器已关闭");
+        } catch (IOException e) {
+            System.err.println("关闭服务器失败: " + e.getMessage());
+        }
+    }
+
+    public static void main(String[] args) {
+        SocketServerController server = new SocketServerController();
+        server.start();
     }
 }
