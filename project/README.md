@@ -18,19 +18,18 @@ for-test:
 ```
 ~/workspace/javaspace/easy-db » source db_shell.sh                                                      urmsone@urmsonedeMacBook-Pro
 -------------------------------------------------------------------------------------------------------------------------------------
-~/workspace/javaspace/easy-db » easy_set zsy1 value1                                                    urmsone@urmsonedeMacBook-Pro
+~/workspace/javaspace/easy-db » easy_set xjc1 value1                                                    urmsone@urmsonedeMacBook-Pro
 -------------------------------------------------------------------------------------------------------------------------------------
-~/workspace/javaspace/easy-db » easy_set zsy2 value2                                                    urmsone@urmsonedeMacBook-Pro
+~/workspace/javaspace/easy-db » easy_set xjc2 value2                                                    urmsone@urmsonedeMacBook-Pro
 -------------------------------------------------------------------------------------------------------------------------------------
-~/workspace/javaspace/easy-db » easy_set zsy3 value3                                                    urmsone@urmsonedeMacBook-Pro
+~/workspace/javaspace/easy-db » easy_set xjc3 value3                                                    urmsone@urmsonedeMacBook-Pro
 -------------------------------------------------------------------------------------------------------------------------------------
-~/workspace/javaspace/easy-db » easy_get zsy3                                                           urmsone@urmsonedeMacBook-Pro
-value3
+~/workspace/javaspace/easy-db » easy_get xjc3 value3                                                          urmsone@urmsonedeMacBook-Pro
 -------------------------------------------------------------------------------------------------------------------------------------
 ~/workspace/javaspace/easy-db » cat easy-db                                                             urmsone@urmsonedeMacBook-Pro
-zsy1,value1
-zsy2,value2
-zsy3,value3
+xjc1,value1
+xjc2,value2
+xjc3,value3
 -------------------------------------------------------------------------------------------------------------------------------------
 ```
 ## 基于内存索引的kv数据库
@@ -52,8 +51,8 @@ zsy3,value3
 log的数据结构设计：
 通过追加log的方式实现，我们可以记录命令的方式进行，而不是记录原始数据。如：
 ```
-{"key":"zsy1","type":"SET","value":"1"}
-{"key":"zsy1","type":"RM","value":"1"}
+{"key":"xjc1","type":"SET","value":"1"}
+{"key":"xjc1","type":"RM","value":"1"}
 ```
 优点：
 - 可方便的实现删除的功能（标记删除）。查询的时候，如果查到某个key的数据，type=RM时，数据该数据已被删除
@@ -64,8 +63,8 @@ log的数据结构设计：
 - 数据库启动时，需要通过回放功能，把磁盘中的命令redo一次来刷新索引到内存。
 - 缺点：数据冷启动时，磁盘数据越大，启动时间越长。
 - 上述设计，存命令，仍存在问题，磁盘中没有数据长度，redo操作就无法实现。
-```38{"key":"zsy1","type":"SET","value":"1"}
-38{"key":"zsy2","type":"RM","value":"1"}
+```38{"key":"xjc1","type":"SET","value":"1"}
+38{"key":"xjc2","type":"RM","value":"1"}
 ```
 
 

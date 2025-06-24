@@ -1,12 +1,6 @@
-/*
- *@Type SocketClient.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 13:15
- * @version
- */
 package client;
 
+import dto.ActionDTO;
 import dto.ActionTypeEnum;
 import dto.RespDTO;
 

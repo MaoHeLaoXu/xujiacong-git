@@ -1,10 +1,3 @@
-/*
- *@Type RespDTO.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 13:40
- * @version
- */
 package dto;
 
 import lombok.Getter;

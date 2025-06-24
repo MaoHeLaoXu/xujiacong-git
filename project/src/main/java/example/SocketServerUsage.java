@@ -1,10 +1,3 @@
-/*
- *@Type SocketServerUsage.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 14:08
- * @version
- */
 package example;
 
 import controller.SocketServerController;

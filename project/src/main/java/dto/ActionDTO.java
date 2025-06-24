@@ -1,10 +1,3 @@
-/*
- *@Type CommandDTO.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 12:57
- * @version
- */
 package dto;
 
 import lombok.Getter;
