@@ -1,10 +1,3 @@
-/*
- *@Type ConvertUtil.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 02:09
- * @version
- */
 package utils;
 
 import com.alibaba.fastjson.JSONObject;
