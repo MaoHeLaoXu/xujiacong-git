@@ -1,10 +1,3 @@
-/*
- *@Type SetCommand.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 01:59
- * @version
- */
 package model.command;
 
 import lombok.Getter;

@@ -1,10 +1,3 @@
-/*
- *@Type AbstractCommand.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 01:51
- * @version
- */
 package model.command;
 
 import com.alibaba.fastjson.JSON;

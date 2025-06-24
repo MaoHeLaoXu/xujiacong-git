@@ -1,10 +1,3 @@
-/*
- *@Type Usage.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 03:59
- * @version
- */
 package example;
 
 import service.NormalStore;
