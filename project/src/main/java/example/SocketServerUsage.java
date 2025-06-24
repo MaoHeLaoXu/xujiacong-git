@@ -131,7 +131,14 @@ class KVServer {
     }
 
     public static void main(String[] args) {
-        KVServer server = new KVServer();
-        server.start(1234);
+        new Thread(() -> {
+            KVServer server1 = new KVServer();
+            server1.start(1234);
+        }).start();
+
+        new Thread(() -> {
+            KVServer server2 = new KVServer();
+            server2.start(1235);
+        }).start();
     }
 }
