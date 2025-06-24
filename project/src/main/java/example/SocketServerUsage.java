@@ -19,7 +19,7 @@ class KVServer {
 
     public KVServer() {
         keyValueStore = new HashMap<>();// 初始化一个HashMap实例作为键值对存储容器
-        logPath = "D:/Desktop/javakvsql/数据库更新日志/数据库更新日志"; // 定义日志文件存储路径
+        logPath = "D:/Desktop/xjc-java/数据库更新日志/数据库更新日志"; // 定义日志文件存储路径
         initLogFile();// 调用初始化日志文件的方法
     }
 

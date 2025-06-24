@@ -9,3 +9,8 @@ get 1
 set 1 1
 set 1 1
 set 1 1
+get 1
+set 1 1
+get 1 
+set 1 1
+get 1
