@@ -1,10 +1,3 @@
-/*
- *@Type LoggerUtil.java
- * @Desc
- * @Author urmsone urmsone@163.com
- * @date 2024/6/13 01:34
- * @version
- */
 package utils;
 
 import org.slf4j.Logger;
