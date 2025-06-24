@@ -104,13 +104,6 @@ class KVClient {
                 }
                 gzipOS.finish();
                 System.out.println("压缩完成：" + fileToCompress.getName() + " -> 操作总数.txt.gz");
-
-                // 删除原始文件
-                if (fileToCompress.delete()) {
-                    System.out.println("删除原始文件：" + fileToCompress.getName());
-                } else {
-                    System.out.println("无法删除原始文件：" + fileToCompress.getName());
-                }
             } catch (IOException e) {
                 System.out.println("压缩文件时出错");
                 e.printStackTrace();

@@ -17,3 +17,4 @@ get 1
 set 1 1
 set 2 2
 set 1 1
+set 1 1
