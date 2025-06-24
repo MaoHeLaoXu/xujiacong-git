@@ -26,7 +26,7 @@ public class SocketClient implements Client {
             oos.writeObject(dto);
             oos.flush();
             RespDTO resp = (RespDTO) ois.readObject();
-            System.out.println("resp data: "+ resp.toString());
+            System.out.println("resp data: " + resp.toString());
             // 接收响应数据
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
@@ -35,6 +35,7 @@ public class SocketClient implements Client {
 
     @Override
     public String get(String key) {
+        String result = null;
         try (Socket socket = new Socket(host, port);
              ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
              ObjectInputStream ois = new ObjectInputStream(socket.getInputStream())) {
@@ -43,17 +44,29 @@ public class SocketClient implements Client {
             oos.writeObject(dto);
             oos.flush();
             RespDTO resp = (RespDTO) ois.readObject();
-            System.out.println("resp data: "+ resp.toString());
+            System.out.println("resp data: " + resp.toString());
+            result = resp.getValue();
             // 接收响应数据
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
-        return null;
+        return result;
     }
 
     @Override
     public void rm(String key) {
-
+        try (Socket socket = new Socket(host, port);
+             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
+             ObjectInputStream ois = new ObjectInputStream(socket.getInputStream())) {
+            // 传输序列化对象
+            ActionDTO dto = new ActionDTO(ActionTypeEnum.REMOVE, key, null);
+            oos.writeObject(dto);
+            oos.flush();
+            RespDTO resp = (RespDTO) ois.readObject();
+            System.out.println("resp data: " + resp.toString());
+            // 接收响应数据
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
     }
-
 }
