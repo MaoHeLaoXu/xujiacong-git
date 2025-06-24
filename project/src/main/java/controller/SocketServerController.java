@@ -68,6 +68,11 @@ public class SocketServerController implements Controller {
         }
     }
 
+    @Override
+    public void close() throws IOException {
+
+    }
+
     public void stopServer() {
         try {
             if (serverSocket != null && !serverSocket.isClosed()) {

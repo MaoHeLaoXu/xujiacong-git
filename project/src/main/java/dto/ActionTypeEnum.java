@@ -9,7 +9,7 @@ public enum ActionTypeEnum {
      * 删
      * */
     RM,
-    /*
+    REMOVE, /*
     * 查
     * */
     GET
