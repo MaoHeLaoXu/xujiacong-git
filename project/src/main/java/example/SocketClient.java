@@ -1,76 +1,160 @@
 package example;
 
-import client.Client;
-import dto.ActionDTO;
-import dto.ActionTypeEnum;
-import dto.RespDTO;
-import dto.RespStatusTypeEnum;
-
 import java.io.*;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Scanner;
+import java.util.zip.GZIPOutputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class SocketClient implements Client {
-    private String host;
-    private int port;
+class KVClient {
+    private Socket socket;
+    private PrintWriter out;
+    private BufferedReader in;
+    private Scanner scanner;
+    private Map<String, String> cache = new HashMap<>();
+    private BufferedWriter fileWriter;
+    private final int MAX_FILE_SIZE = 4 * 4; // 1 MB
+    private final int MAX_FILES = 5; // 最多保留5个文件
 
-    public SocketClient(String host, int port) {
-        this.host = host;
-        this.port = port;
-    }
+    public void startConnection(String ip, int port) {
+        try {
+            socket = new Socket(ip, port);
+            out = new PrintWriter(socket.getOutputStream(), true);
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            scanner = new Scanner(System.in);
+            System.out.println("已连接到服务器");
 
-    @Override
-    public void set(String key, String value) {
-        try (Socket socket = new Socket(host, port);
-             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
-             ObjectInputStream ois = new ObjectInputStream(socket.getInputStream())) {
-            // 传输序列化对象
-            ActionDTO dto = new ActionDTO(ActionTypeEnum.SET, key, value);
-            oos.writeObject(dto);
-            oos.flush();
-            RespDTO resp = (RespDTO) ois.readObject();
-            System.out.println("resp data: " + resp.toString());
-            // 接收响应数据
-        } catch (IOException | ClassNotFoundException e) {
+            // 初始化文件写入器，将每次操作的数据写入到文件中
+            fileWriter = new BufferedWriter(new FileWriter("操作总数.txt", true));
+        } catch (IOException e) {
+            System.out.println("无法连接到服务器");
             e.printStackTrace();
+            return;
         }
-    }
 
-    @Override
-    public String get(String key) {
-        String result = null;
-        try (Socket socket = new Socket(host, port);
-             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
-             ObjectInputStream ois = new ObjectInputStream(socket.getInputStream())) {
-            // 传输序列化对象
-            ActionDTO dto = new ActionDTO(ActionTypeEnum.GET, key, null);
-            oos.writeObject(dto);
-            oos.flush();
-            RespDTO resp = (RespDTO) ois.readObject();
-            System.out.println("resp data: " + resp.toString());
-            if (resp.getStatus() == RespStatusTypeEnum.SUCCESS) {
-                result = resp.getValue();
+        try {
+            while (true) {
+                System.out.print("请输入命令(set <key> <value>, get <key>, rm <key>, batch <key1=value1 key2=value2 ...>, exit): ");
+                String userInput = scanner.nextLine();
+                if ("exit".equalsIgnoreCase(userInput)) {
+                    break;
+                } else if (userInput.startsWith("batch ")) {
+                    handleBatch(userInput.substring(6));
+                } else {
+                    out.println(userInput);
+                    String response = in.readLine();
+                    System.out.println("服务器响应： " + response);
+                    // 将操作写入文件
+                    writeToFile(userInput);
+                }
             }
-            // 接收响应数据
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (IOException e) {
+            System.out.println("通信错误");
             e.printStackTrace();
+        } finally {
+            stopConnection();
         }
-        return result;
     }
 
-    @Override
-    public void rm(String key) {
-        try (Socket socket = new Socket(host, port);
-             ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
-             ObjectInputStream ois = new ObjectInputStream(socket.getInputStream())) {
-            // 传输序列化对象
-            ActionDTO dto = new ActionDTO(ActionTypeEnum.RM, key, null);
-            oos.writeObject(dto);
-            oos.flush();
-            RespDTO resp = (RespDTO) ois.readObject();
-            System.out.println("resp data: " + resp.toString());
-            // 接收响应数据
-        } catch (IOException | ClassNotFoundException e) {
+    private void writeToFile(String operation) {
+        try {
+            fileWriter.write(operation + "\n");
+            fileWriter.flush(); // 确保写入文件
+            rotateAndCompressIfNeeded();
+        } catch (IOException e) {
+            System.out.println("写入文件时出错");
             e.printStackTrace();
         }
+    }
+
+    private void rotateAndCompressIfNeeded() {
+        File currentFile = new File("操作总数.txt");
+        long fileSize = currentFile.length();
+        if (fileSize > MAX_FILE_SIZE) {
+            rotateFiles();
+            compressFile(currentFile);
+        }
+    }
+
+    private void rotateFiles() {
+        File currentFile = new File("操作总数.txt");
+        for (int i = MAX_FILES - 2; i >= 0; i--) {
+            File nextFile = new File("操作总数_" + i + ".txt");
+            if (nextFile.exists()) {
+                nextFile.renameTo(new File("操作总数_" + (i + 1) + ".txt"));
+            }
+        }
+        currentFile.renameTo(new File("操作总数_0.txt"));
+    }
+
+    private void compressFile(File fileToCompress) {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(() -> {
+            try (FileInputStream fis = new FileInputStream(fileToCompress);
+                 FileOutputStream fos = new FileOutputStream("操作总数.txt.gz");
+                 GZIPOutputStream gzipOS = new GZIPOutputStream(fos)) {
+
+                byte[] buffer = new byte[1024];
+                int len;
+                while ((len = fis.read(buffer)) != -1) {
+                    gzipOS.write(buffer, 0, len);
+                }
+                gzipOS.finish();
+                System.out.println("压缩完成：" + fileToCompress.getName() + " -> 操作总数.txt.gz");
+
+                // 删除原始文件
+                if (fileToCompress.delete()) {
+                    System.out.println("删除原始文件：" + fileToCompress.getName());
+                } else {
+                    System.out.println("无法删除原始文件：" + fileToCompress.getName());
+                }
+            } catch (IOException e) {
+                System.out.println("压缩文件时出错");
+                e.printStackTrace();
+            }
+        });
+        executor.shutdown();
+    }
+
+    private void handleBatch(String keyValuePairs) {
+        String[] pairs = keyValuePairs.split("\\s+");
+        for (String pair : pairs) {
+            String[] kv = pair.split("=");
+            if (kv.length == 2) {
+                cache.put(kv[0], kv[1]);
+                out.println("set " + kv[0] + " " + kv[1]);
+                writeToFile("set " + kv[0] + " " + kv[1]);
+            }
+        }
+        try {
+            // 等待服务器响应
+            for (int i = 0; i < pairs.length; i++) {
+                System.out.println("服务器响应： " + in.readLine());
+            }
+        } catch (IOException e) {
+            System.out.println("处理批量写入时通信错误");
+            e.printStackTrace();
+        }
+    }
+
+    public void stopConnection() {
+        try {
+            in.close();
+            out.close();
+            scanner.close();
+            socket.close();
+            fileWriter.close(); // 关闭文件写入器
+        } catch (IOException e) {
+            System.out.println("关闭连接时出错");
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) {
+        KVClient client = new KVClient();
+        client.startConnection("127.0.0.1", 1234);
     }
 }
