@@ -128,10 +128,13 @@ class KVClient {
     }
 
     private void compressFile(File fileToCompress) {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(() -> {
+        // 创建临时文件用于压缩
+        File tempFile = new File(fileToCompress.getAbsolutePath() + ".temp");
+
+        try {
+            // 使用try-with-resources确保所有流都被正确关闭
             try (FileInputStream fis = new FileInputStream(fileToCompress);
-                 FileOutputStream fos = new FileOutputStream("操作总数.txt.gz");
+                 FileOutputStream fos = new FileOutputStream(tempFile);
                  GZIPOutputStream gzipOS = new GZIPOutputStream(fos)) {
 
                 byte[] buffer = new byte[1024];
@@ -140,14 +143,37 @@ class KVClient {
                     gzipOS.write(buffer, 0, len);
                 }
                 gzipOS.finish();
-                System.out.println("压缩完成：" + fileToCompress.getName() + " -> 操作总数.txt.gz");
-
-            } catch (IOException e) {
-                System.out.println("压缩文件时出错");
-                e.printStackTrace();
             }
-        });
-        executor.shutdown();
+
+            // 压缩完成后，关闭所有流，然后重命名临时文件
+            if (tempFile.exists()) {
+                // 先删除目标文件（如果存在）
+                File compressedFile = new File("操作总数.txt.gz");
+                if (compressedFile.exists()) {
+                    compressedFile.delete();
+                }
+
+                // 重命名临时文件为最终压缩文件名
+                if (tempFile.renameTo(compressedFile)) {
+                    System.out.println("压缩完成：" + fileToCompress.getName() + " -> " + compressedFile.getName());
+
+                    // 尝试删除原始文件
+                    if (fileToCompress.delete()) {
+                        System.out.println("删除原始文件：" + fileToCompress.getName());
+                    } else {
+                        System.out.println("无法删除原始文件：" + fileToCompress.getName()
+                                + "，尝试在JVM退出时删除");
+                        // 注册在JVM退出时删除文件
+                        fileToCompress.deleteOnExit();
+                    }
+                } else {
+                    System.out.println("无法重命名临时压缩文件");
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("压缩文件时出错");
+            e.printStackTrace();
+        }
     }
 
     private void handleBatch(String keyValuePairs) {
