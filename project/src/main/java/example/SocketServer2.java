@@ -9,18 +9,19 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.*;
 
-class NoSQLServer1 {
-    private static final int PORT = 12345;
+class NoSQLServer2 {
+    private static final int PORT = 12347;
     private static final String DATA_FILE_PATH = "data.txt";
     private static final String LOG_FILE_PATH = "server_log.log";
     private static final long MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-    private static final boolean IS_MASTER = false; // 从节点标识
+    private static boolean IS_MASTER;
 
     private static Map<String, String> dataCache = new ConcurrentHashMap<>();
     private static Map<String, Long> index = new ConcurrentHashMap<>();
     private static LogWriter logWriter;
 
     public static void main(String[] args) {
+        loadConfig();
         loadDataAndBuildIndex();
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             logWriter = new LogWriter(LOG_FILE_PATH, MAX_LOG_FILE_SIZE);
@@ -34,6 +35,17 @@ class NoSQLServer1 {
             }
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private static void loadConfig() {
+        try (InputStream input = new FileInputStream("config.properties")) {
+            Properties prop = new Properties();
+            prop.load(input);
+            String nodeName = "node" + System.getProperty("node.id", "3");
+            IS_MASTER = "master".equalsIgnoreCase(prop.getProperty(nodeName + ".role"));
+        } catch (IOException ex) {
+            ex.printStackTrace();
         }
     }
 

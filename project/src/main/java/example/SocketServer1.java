@@ -9,8 +9,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.*;
 
-class NoSQLServer {
-    private static final int PORT = 12345;
+class NoSQLServer1 {
+    private static final int PORT = 12346;
     private static final String DATA_FILE_PATH = "data.txt";
     private static final String LOG_FILE_PATH = "server_log.log";
     private static final long MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -42,7 +42,7 @@ class NoSQLServer {
         try (InputStream input = new FileInputStream("config.properties")) {
             Properties prop = new Properties();
             prop.load(input);
-            String nodeName = "node" + System.getProperty("node.id", "1");
+            String nodeName = "node" + System.getProperty("node.id", "2");
             IS_MASTER = "master".equalsIgnoreCase(prop.getProperty(nodeName + ".role"));
         } catch (IOException ex) {
             ex.printStackTrace();

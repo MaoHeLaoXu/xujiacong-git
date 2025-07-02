@@ -7,12 +7,12 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.zip.*;
 
-class NoSQLClient {
+class NoSQLClient2 {
     private static final String SERVER_ADDRESS = "localhost";
     private static final int SERVER_PORT = 12345;
 
     public static void main(String[] args) {
-        String nodeId = args.length > 0 ? args[0] : "1";
+        String nodeId = args.length > 0 ? args[0] : "3";
         try (Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT + Integer.parseInt(nodeId) - 1);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
