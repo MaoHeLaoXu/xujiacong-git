@@ -3,142 +3,163 @@ package example;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.Map;
+import java.nio.file.*;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
-class KVServer {
-    private Map<String, String> keyValueStore;
-    private String logPath;
+class NoSQLServer {
+    private static final int PORT = 12345;
+    private static final String DATA_FILE_PATH = "data.txt";
+    private static final String LOG_FILE_PATH = "server_log.log";
+    private static final long MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
-    public KVServer() {
-        keyValueStore = new HashMap<>();
-        logPath = "D:/Desktop/xjc-java/数据库更新日志/数据库更新日志";
-        initLogFile();
-    }
-
-    private void initLogFile() {
-        try {
-            Files.createDirectories(Paths.get(logPath));
-        } catch (IOException e) {
-            System.out.println("无法创建日志文件夹");
-            e.printStackTrace();
-        }
-    }
-
-    public void start(int port) {
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("服务器已启动，正在监听端口 " + port + "...");
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                System.out.println("客户端连接成功");
-                // 为每个客户端连接创建一个新的线程
-                new ClientHandler(clientSocket, keyValueStore, logPath).start();
-            }
-        } catch (IOException e) {
-            System.out.println("服务器异常");
-            e.printStackTrace();
-        }
-    }
-
-    private static class ClientHandler extends Thread {
-        private final Socket clientSocket;
-        private final Map<String, String> keyValueStore;
-        private final String logPath;
-        private PrintWriter out;
-        private BufferedReader in;
-
-        public ClientHandler(Socket socket, Map<String, String> keyValueStore, String logPath) {
-            this.clientSocket = socket;
-            this.keyValueStore = keyValueStore;
-            this.logPath = logPath;
-        }
-
-        @Override
-        public void run() {
-            try {
-                out = new PrintWriter(clientSocket.getOutputStream(), true);
-                in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-
-                String userInput;
-                while ((userInput = in.readLine()) != null) {
-                    System.out.println("客户端请求: " + userInput);
-                    String[] commandParts = userInput.split("\\s+", 3);
-                    String command = commandParts[0];
-
-                    if ("set".equalsIgnoreCase(command)) {
-                        String key = commandParts[1];
-                        String value = commandParts[2];
-                        addToLog("set", key, value);
-                        keyValueStore.put(key, value);
-                        out.println("Key " + key + " 设置成功");
-                    } else if ("get".equalsIgnoreCase(command)) {
-                        String key = commandParts[1];
-                        String value = keyValueStore.get(key);
-                        if (value != null) {
-                            out.println(value);
-                        } else {
-                            out.println("无法找到该key");
-                        }
-                    } else if ("rm".equalsIgnoreCase(command)) {
-                        String key = commandParts[1];
-                        String removedValue = keyValueStore.remove(key);
-                        if (removedValue != null) {
-                            addToLog("rm", key, removedValue);
-                            out.println("Key " + key + " 成功删除");
-                        } else {
-                            out.println("无法找到该key");
-                        }
-                    } else {
-                        out.println("无效命令");
-                    }
-                }
-            } catch (IOException e) {
-                System.out.println("客户端连接异常");
-                e.printStackTrace();
-            } finally {
-                stopHandler();
-            }
-        }
-
-        private void addToLog(String operation, String key, String value) {
-            LocalDateTime timestamp = LocalDateTime.now();
-            String logFileName = timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss")) + ".log";
-            Path logFilePath = Paths.get(logPath + logFileName);
-
-            try (PrintWriter logWriter = new PrintWriter(new FileWriter(logFilePath.toString(), true))) {
-                logWriter.println(operation + " " + key + " " + value);
-            } catch (IOException e) {
-                System.out.println("无法写入日志文件");
-                e.printStackTrace();
-            }
-        }
-
-        private void stopHandler() {
-            try {
-                in.close();
-                out.close();
-                clientSocket.close();
-            } catch (IOException e) {
-                System.out.println("关闭连接时出错");
-                e.printStackTrace();
-            }
-        }
-    }
+    private static Map<String, String> dataStore = new ConcurrentHashMap<>();
+    private static LogWriter logWriter;
 
     public static void main(String[] args) {
-        new Thread(() -> {
-            KVServer server1 = new KVServer();
-            server1.start(1234);
-        }).start();
+        loadData();
+        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+            logWriter = new LogWriter(LOG_FILE_PATH, MAX_LOG_FILE_SIZE);
+            System.out.println("NoSQL服务器正在端口上运行 " + PORT);
+            logWriter.write("NoSQL服务器在端口上启动 " + PORT);
 
-        new Thread(() -> {
-            KVServer server2 = new KVServer();
-            server2.start(1235);
-        }).start();
+            while (true) {
+                try (Socket clientSocket = serverSocket.accept();
+                     PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
+                     BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()))) {
+
+                    String request;
+                    while ((request = in.readLine()) != null) {
+                        String response = processRequest(request);
+                        out.println(response);
+                        logWriter.write("收到: " + request + " | 回答: " + response);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    logWriter.write("错误: " + e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static String processRequest(String request) {
+        String[] parts = request.split(" ", 2);
+        if (parts.length < 2) return "无效请求";
+
+        String command = parts[0].toUpperCase();
+        String payload = parts[1];
+
+        switch (command) {
+            case "GET":
+                return dataStore.getOrDefault(payload, "key不存在");
+            case "SET":
+                String[] kv = payload.split(" ", 2);
+                if (kv.length < 2) return "set请求无效";
+                dataStore.put(kv[0], kv[1]);
+                saveData();
+                return "OK";
+            case "RM":
+                dataStore.remove(payload);
+                saveData();
+                return "OK";
+            default:
+                return "不知名的命令";
+        }
+    }
+
+    private static void loadData() {
+        try (BufferedReader reader = new BufferedReader(new FileReader(DATA_FILE_PATH))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] kv = line.split(" ", 2);
+                if (kv.length == 2) {
+                    dataStore.put(kv[0], kv[1]);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void saveData() {
+        try (PrintWriter writer = new PrintWriter(new FileWriter(DATA_FILE_PATH))) {
+            for (Map.Entry<String, String> entry : dataStore.entrySet()) {
+                writer.println(entry.getKey() + " " + entry.getValue());
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    static class LogWriter {
+        private final String logFilePath;
+        private final long maxFileSize;
+        private long currentFileSize;
+        private PrintWriter writer;
+        private final ExecutorService executor;
+
+        public LogWriter(String logFilePath, long maxFileSize) throws IOException {
+            this.logFilePath = logFilePath;
+            this.maxFileSize = maxFileSize;
+            this.writer = new PrintWriter(new BufferedWriter(new FileWriter(logFilePath, true)));
+            this.currentFileSize = new File(logFilePath).length();
+            this.executor = Executors.newFixedThreadPool(2);
+        }
+
+        public synchronized void write(String message) throws IOException {
+            String logEntry = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + " " + message;
+            writer.println(logEntry);
+            writer.flush();
+            currentFileSize += logEntry.length();
+
+            if (currentFileSize >= maxFileSize) {
+                rotateLogFile();
+            }
+        }
+
+        private void rotateLogFile() throws IOException {
+            writer.close();
+            String rotatedFileName = logFilePath + "." + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+            Files.move(Paths.get(logFilePath), Paths.get(rotatedFileName));
+            this.writer = new PrintWriter(new BufferedWriter(new FileWriter(logFilePath, true)));
+            this.currentFileSize = 0;
+
+            // Compress the rotated file
+            executor.submit(() -> compressFile(rotatedFileName));
+        }
+
+        private void compressFile(String fileName) {
+            try {
+                String zipFileName = fileName + ".zip";
+                try (FileInputStream fis = new FileInputStream(fileName);
+                     FileOutputStream fos = new FileOutputStream(zipFileName);
+                     BufferedInputStream bis = new BufferedInputStream(fis);
+                     ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(fos))) {
+
+                    zos.putNextEntry(new ZipEntry(new File(fileName).getName()));
+
+                    byte[] buffer = new byte[1024];
+                    int read;
+                    while ((read = bis.read(buffer)) != -1) {
+                        zos.write(buffer, 0, read);
+                    }
+
+                    zos.closeEntry();
+                }
+                Files.delete(Paths.get(fileName));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        public void shutdown() {
+            executor.shutdown();
+            writer.close();
+        }
     }
 }

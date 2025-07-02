@@ -2,214 +2,92 @@ package example;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Scanner;
-import java.util.zip.GZIPOutputStream;
+import java.nio.file.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.zip.*;
 
-class KVClient {
-    private Socket socket;
-    private PrintWriter out;
-    private BufferedReader in;
-    private Scanner scanner;
-    private Map<String, String> cache = new HashMap<>();
-    private BufferedWriter fileWriter;
-    private final int MAX_FILE_SIZE = 4 * 4; // 1 MB
-    private final int MAX_FILES = 5; // 最多保留5个文件
-    private List<String[]> serverList;
-
-    public KVClient() {
-        serverList = readServerListFromConfig();
-    }
-
-    private List<String[]> readServerListFromConfig() {
-        List<String[]> servers = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(new FileReader("servers.config"))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                // 使用 : 作为分隔符
-                String[] parts = line.split(":");
-                if (parts.length == 2) {
-                    servers.add(parts);
-                }
-            }
-        } catch (IOException e) {
-            System.out.println("读取服务器配置文件时出错");
-            e.printStackTrace();
-        }
-        return servers;
-    }
-
-    public void startConnection() {
-        if (serverList.isEmpty()) {
-            System.out.println("没有可用的服务器");
-            return;
-        }
-        // 简单的轮询选择服务器
-        for (String[] server : serverList) {
-            String ip = server[0];
-            int port = Integer.parseInt(server[1]);
-            try {
-                socket = new Socket(ip, port);
-                out = new PrintWriter(socket.getOutputStream(), true);
-                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                scanner = new Scanner(System.in);
-                System.out.println("已连接到服务器 " + ip + ":" + port);
-
-                // 初始化文件写入器，将每次操作的数据写入到文件中
-                fileWriter = new BufferedWriter(new FileWriter("操作总数.txt", true));
-                break;
-            } catch (IOException e) {
-                System.out.println("无法连接到服务器 " + ip + ":" + port);
-            }
-        }
-        if (socket == null) {
-            System.out.println("所有服务器都无法连接");
-            return;
-        }
-
-        try {
-            while (true) {
-                System.out.print("请输入命令(set <key> <value>, get <key>, rm <key>, batch <key1=value1 key2=value2 ...>, exit): ");
-                String userInput = scanner.nextLine();
-                if ("exit".equalsIgnoreCase(userInput)) {
-                    break;
-                } else if (userInput.startsWith("batch ")) {
-                    handleBatch(userInput.substring(6));
-                } else {
-                    out.println(userInput);
-                    String response = in.readLine();
-                    System.out.println("服务器响应： " + response);
-                    // 将操作写入文件
-                    writeToFile(userInput);
-                }
-            }
-        } catch (IOException e) {
-            System.out.println("通信错误");
-            e.printStackTrace();
-        } finally {
-            stopConnection();
-        }
-    }
-
-    private void writeToFile(String operation) {
-        try {
-            fileWriter.write(operation + "\n");
-            fileWriter.flush(); // 确保写入文件
-            rotateAndCompressIfNeeded();
-        } catch (IOException e) {
-            System.out.println("写入文件时出错");
-            e.printStackTrace();
-        }
-    }
-
-    private void rotateAndCompressIfNeeded() {
-        File currentFile = new File("操作总数.txt");
-        long fileSize = currentFile.length();
-        if (fileSize > MAX_FILE_SIZE) {
-            rotateFiles();
-            compressFile(currentFile);
-        }
-    }
-
-    private void rotateFiles() {
-        File currentFile = new File("操作总数.txt");
-        for (int i = MAX_FILES - 2; i >= 0; i--) {
-            File nextFile = new File("操作总数_" + i + ".txt");
-            if (nextFile.exists()) {
-                nextFile.renameTo(new File("操作总数_" + (i + 1) + ".txt"));
-            }
-        }
-        currentFile.renameTo(new File("操作总数_0.txt"));
-    }
-
-    private void compressFile(File fileToCompress) {
-        // 创建临时文件用于压缩
-        File tempFile = new File(fileToCompress.getAbsolutePath() + ".temp");
-
-        try {
-            // 使用try-with-resources确保所有流都被正确关闭
-            try (FileInputStream fis = new FileInputStream(fileToCompress);
-                 FileOutputStream fos = new FileOutputStream(tempFile);
-                 GZIPOutputStream gzipOS = new GZIPOutputStream(fos)) {
-
-                byte[] buffer = new byte[1024];
-                int len;
-                while ((len = fis.read(buffer)) != -1) {
-                    gzipOS.write(buffer, 0, len);
-                }
-                gzipOS.finish();
-            }
-
-            // 压缩完成后，关闭所有流，然后重命名临时文件
-            if (tempFile.exists()) {
-                // 先删除目标文件（如果存在）
-                File compressedFile = new File("操作总数.txt.gz");
-                if (compressedFile.exists()) {
-                    compressedFile.delete();
-                }
-
-                // 重命名临时文件为最终压缩文件名
-                if (tempFile.renameTo(compressedFile)) {
-                    System.out.println("压缩完成：" + fileToCompress.getName() + " -> " + compressedFile.getName());
-
-                    // 尝试删除原始文件
-                    if (fileToCompress.delete()) {
-                        System.out.println("删除原始文件：" + fileToCompress.getName());
-                    } else {
-                        System.out.println("无法删除原始文件：" + fileToCompress.getName()
-                                + "，尝试在JVM退出时删除");
-                        // 注册在JVM退出时删除文件
-                        fileToCompress.deleteOnExit();
-                    }
-                } else {
-                    System.out.println("无法重命名临时压缩文件");
-                }
-            }
-        } catch (IOException e) {
-            System.out.println("压缩文件时出错");
-            e.printStackTrace();
-        }
-    }
-
-    private void handleBatch(String keyValuePairs) {
-        String[] pairs = keyValuePairs.split("\\s+");
-        for (String pair : pairs) {
-            String[] kv = pair.split("=");
-            if (kv.length == 2) {
-                cache.put(kv[0], kv[1]);
-                out.println("set " + kv[0] + " " + kv[1]);
-                writeToFile("set " + kv[0] + " " + kv[1]);
-            }
-        }
-        try {
-            // 等待服务器响应
-            for (int i = 0; i < pairs.length; i++) {
-                System.out.println("服务器响应： " + in.readLine());
-            }
-        } catch (IOException e) {
-            System.out.println("处理批量写入时通信错误");
-            e.printStackTrace();
-        }
-    }
-
-    public void stopConnection() {
-        try {
-            in.close();
-            out.close();
-            scanner.close();
-            socket.close();
-            fileWriter.close(); // 关闭文件写入器
-        } catch (IOException e) {
-            System.out.println("关闭连接时出错");
-            e.printStackTrace();
-        }
-    }
+class NoSQLClient {
+    private static final String SERVER_ADDRESS = "localhost";
+    private static final int SERVER_PORT = 12345;
 
     public static void main(String[] args) {
-        KVClient client = new KVClient();
-        client.startConnection();
+        try (Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+             BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
+             LogWriter logWriter = new LogWriter()) {
+
+            System.out.println("已连接到位于这里的NoSQL服务器 " + SERVER_ADDRESS + ":" + SERVER_PORT);
+            String userInput;
+            while ((userInput = stdIn.readLine()) != null) {
+                out.println(userInput);
+                String serverResponse = in.readLine();
+                System.out.println("服务器响应: " + serverResponse);
+                logWriter.write("Client: " + userInput);
+                logWriter.write("Server: " + serverResponse);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    static class LogWriter implements AutoCloseable {
+        private static final String LOG_FILE_PATH = "client_log.log";
+        private static final long MAX_FILE_SIZE =  1024 * 1024; // 10 MB
+        private long currentFileSize;
+        private PrintWriter writer;
+
+        public LogWriter() throws IOException {
+            this.writer = new PrintWriter(new BufferedWriter(new FileWriter(LOG_FILE_PATH, true)));
+            this.currentFileSize = new File(LOG_FILE_PATH).length();
+        }
+
+        public synchronized void write(String message) throws IOException {
+            String logEntry = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()) + " " + message;
+            writer.println(logEntry);
+            writer.flush();
+            currentFileSize += logEntry.length();
+
+            if (currentFileSize >= MAX_FILE_SIZE) {
+                rotateLogFile();
+            }
+        }
+
+        private void rotateLogFile() throws IOException {
+            writer.close();
+            String rotatedFileName = LOG_FILE_PATH + "." + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+            Files.move(Paths.get(LOG_FILE_PATH), Paths.get(rotatedFileName));
+            this.writer = new PrintWriter(new BufferedWriter(new FileWriter(LOG_FILE_PATH, true)));
+            this.currentFileSize = 0;
+
+            // Compress the rotated file
+            compressFile(rotatedFileName);
+        }
+
+        private void compressFile(String fileName) throws IOException {
+            String zipFileName = fileName + ".zip";
+            try (FileInputStream fis = new FileInputStream(fileName);
+                 FileOutputStream fos = new FileOutputStream(zipFileName);
+                 BufferedInputStream bis = new BufferedInputStream(fis);
+                 ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(fos))) {
+
+                zos.putNextEntry(new ZipEntry(new File(fileName).getName()));
+
+                byte[] buffer = new byte[1024];
+                int read;
+                while ((read = bis.read(buffer)) != -1) {
+                    zos.write(buffer, 0, read);
+                }
+
+                zos.closeEntry();
+            }
+            Files.delete(Paths.get(fileName));
+        }
+
+        @Override
+        public void close() throws IOException {
+            writer.close();
+        }
     }
 }
