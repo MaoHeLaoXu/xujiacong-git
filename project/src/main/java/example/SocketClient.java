@@ -21,11 +21,24 @@ class NoSQLClient {
             System.out.println("已连接到位于这里的NoSQL服务器 " + SERVER_ADDRESS + ":" + SERVER_PORT);
             String userInput;
             while ((userInput = stdIn.readLine()) != null) {
-                out.println(userInput);
-                String serverResponse = in.readLine();
-                System.out.println("服务器响应: " + serverResponse);
-                logWriter.write("Client: " + userInput);
-                logWriter.write("Server: " + serverResponse);
+                if ("exit".equalsIgnoreCase(userInput)) {
+                    break;
+                } else if (userInput.startsWith("batch")) {
+                    String[] commands = userInput.substring(6).trim().split(";");
+                    for (String command : commands) {
+                        out.println(command);
+                        String serverResponse = in.readLine();
+                        System.out.println("服务器响应: " + serverResponse);
+                        logWriter.write("Client: " + command);
+                        logWriter.write("Server: " + serverResponse);
+                    }
+                } else {
+                    out.println(userInput);
+                    String serverResponse = in.readLine();
+                    System.out.println("服务器响应: " + serverResponse);
+                    logWriter.write("Client: " + userInput);
+                    logWriter.write("Server: " + serverResponse);
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();

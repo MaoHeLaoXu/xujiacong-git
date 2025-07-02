@@ -9,12 +9,12 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.zip.*;
 
-class NoSQLServer {
+class NoSQLServer1 {
     private static final int PORT = 12345;
     private static final String DATA_FILE_PATH = "data.txt";
     private static final String LOG_FILE_PATH = "server_log.log";
     private static final long MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-    private static final boolean IS_MASTER = true; // 主节点标识
+    private static final boolean IS_MASTER = false; // 从节点标识
 
     private static Map<String, String> dataCache = new ConcurrentHashMap<>();
     private static Map<String, Long> index = new ConcurrentHashMap<>();
